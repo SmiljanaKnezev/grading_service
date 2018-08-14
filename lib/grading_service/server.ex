@@ -1,7 +1,5 @@
 defmodule GradingService.Server do
 
-
-
   def check_answer(question, answer) do
     generate_questions_map()
     |> Enum.find(fn {_key, val} -> String.equivalent?(List.first(Map.keys(val)), question) end)
@@ -34,23 +32,40 @@ defmodule GradingService.Server do
      UserData.add_user(username)
   end
 
-  def ask_for_question(username) do
-    UserData.add_question_asked(username)  #treba mi neka veza izmedju username i question handle-a
-    {{:question, Map.keys(generate_question())}, {:question_handle, UUID.uuid4()}} #treba da vrati i question handle, vraca tuple?
+  # def ask_for_question(user_handle) do
+  #   if (cant_get_question?(user_handle)) do
+  #     "You have unanswered question, please answer it to get another one"
+  #   else
+  #   q_handle = UserData.add_question_asked(user_handle) 
+  #   #ako imam question handle nije vezan za pitanje, ako ppoturim bilo koje drugo moze da prodje kao tacno
+  #   #da napravim jos jednog agenta?
+  #   {{:question, List.first(Map.keys(generate_question()))}, {:question_handle, q_handle}} 
+  #   end
+  # end
+
+  def cant_get_question?(user_handle) do
+    UserData.has_unanswered_question?(user_handle)
   end
 
-  def answer_question(question_handle, question, answer) do  #trebalo bi da zabranim da se ponovo odgovara na pitanje ako je jednom vec odgovoreno
-    if check_answer(question, answer) do
-      UserData.add_correct_answer(username)
-      "The answer is correct"
-    else
-      "Sorry, wrong answer"
-    end
+  def get_question(user_handle) do
+     q_handle = UserData.add_question_asked(user_handle) 
+    {{:question, List.first(Map.keys(generate_question()))}, {:question_handle, q_handle}} 
   end
 
-  #ovo cu morati da modifikujem, i ovo da ide preko handle?
-  def get_statistics(username) do
-    data = UserData.watch(username)
+  def answer_question(user_handle, question_handle, question, answer) do 
+    if(UserData.check_question_handle?(user_handle, question_handle)) do 
+      if check_answer(question, answer) do
+       UserData.add_correct_answer(user_handle) 
+        "The answer is correct"
+      else
+        "Sorry, wrong answer" 
+      end
+   end
+  end
+
+  def get_statistics(user_handle) do
+    data = UserData.watch(user_handle)
+    #da ovde ubacim jos username
     "questions: " <> Integer.to_string(Map.get(data, :questions)) <> " correct: " <> Integer.to_string(Map.get(data, :correct))
   end
 

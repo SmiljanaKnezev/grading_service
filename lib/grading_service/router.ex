@@ -17,8 +17,7 @@ plug Plug.Parsers, parsers: [:json],
 #- Use usvc
 #- Use plain JSON
 #- Use curl as a client (edited)
-
-#da li ja response treba da vracam kao json? - da
+# error handling, ako prosledim user_handle koji ne postoji u get question, pukne
 
   plug :match
   plug :dispatch
@@ -26,35 +25,69 @@ plug Plug.Parsers, parsers: [:json],
 
   post "/register" do
     {:ok, username} = Map.fetch(conn.body_params, "username")
-    GradingService.Server.register(username)
-    #treba da vrati handle koji je jedinstven
-    send_resp(conn, 200, "Successfully registered #{username}!")
+    user_handle = GradingService.Server.register(username) 
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, Poison.encode!(%{user_handle: user_handle}))
   end
 
-  post "/ask_question" do
-    {:ok, username} = Map.fetch(conn.body_params, "username")
-    question = GradingService.Server.ask_for_question(username)
-    send_resp(conn, 200, "How much is #{question}")
+  post "/get_question" do
+    {:ok, user_handle} = Map.fetch(conn.body_params, "user_handle")
+    if GradingService.Server.cant_get_question?(user_handle) do
+      unanswered_response(conn)
+    else
+      question_response(user_handle, conn)
+     end
+  end
+
+  defp question_response(user_handle, conn) do
+        {{:question, question}, {:question_handle, q_handle}} = GradingService.Server.get_question(user_handle)
+     conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, Poison.encode!(%{question: question, question_handle: q_handle}))
+
+  end
+
+  defp unanswered_response(conn) do
+    response = "You have unanswered question, please answer it to get another one"
+      conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, Poison.encode!(%{response: response}))
   end
 
   post "/statistics" do
-    {:ok, username} = Map.fetch(conn.body_params, "username")
-    stat = GradingService.Server.get_statistics(username)
-    send_resp(conn, 200, "Statistics for #{username} : #{inspect stat}")
+    {:ok, user_handle} = Map.fetch(conn.body_params, "user_handle")
+    stat = GradingService.Server.get_statistics(user_handle)
+    #send_resp(conn, 200, "Statistics for #{username} : #{inspect stat}")
+     conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, Poison.encode!(%{statistics: stat}))
   end
 
-  post "/answer" do
-    {:ok, username} = Map.fetch(conn.body_params, "username")
+
+   post "/answer" do
+    {:ok, user_handle} = Map.fetch(conn.body_params, "user_handle")
     {:ok, question} = Map.fetch(conn.body_params, "question")
+    {:ok, question_handle} = Map.fetch(conn.body_params, "question_handle")
     {:ok, answer} = Map.fetch(conn.body_params, "answer")
-    answ = GradingService.Server.answer_question(username, question, answer)
-    send_resp(conn, 200, "#{answ}")
-  end
+    response = GradingService.Server.answer_question(user_handle, question_handle, question, answer) 
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, Poison.encode!(%{response: response}))
+    end
 
-  #post "/hello" do
+ # post "/answer" do
+    # {:ok, username} = Map.fetch(conn.body_params, "username")
+    # {:ok, question} = Map.fetch(conn.body_params, "question")
+    # {:ok, answer} = Map.fetch(conn.body_params, "answer")
+    # answ = GradingService.Server.answer_question(username, question, answer)
+    # send_resp(conn, 200, "#{answ}")
+  #end
+
+  # post "/hello" do
   #  IO.inspect conn.body_params
   #  send_resp(conn, 200, "Success!")
-  #end
+  # end
 
   get "/grading-service" do
     send_resp(conn, 200, "Hello micro-service!")
